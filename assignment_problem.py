@@ -4,7 +4,7 @@ from pyspark.sql.functions import udf, input_file_name, regexp_extract, current_
 from pyspark.sql.types import StringType, ArrayType, BooleanType
 
 # Initialize Spark session
-spark = SparkSession.builder.appName("Resume Processing").getOrCreate()
+spark = SparkSession.builder.appName("Resume Validation and Processing.").getOrCreate()
 
 # _________________ ETL Job 1:
 # Load normalized classes into a Delta Table called normalized_classes
@@ -31,7 +31,7 @@ def extract_job_titles(html_content):
     job_titles = re.findall(r'<span class="hl">(.*?)</span>', html_content)
     return job_titles
 
-
+# create a title extraction udf, which extracts the job title array from the <span>
 # Register the function as a UDF
 extract_job_titles_udf = udf(extract_job_titles, ArrayType(StringType()))
 
@@ -63,15 +63,19 @@ job_labels_list = normalized_class_df.select("job_label") \
     .map(lambda x: x.lower()) \
     .collect()
 
+# broadcast list of job labels available in normalized class file
 broadcasted_job_labels = spark.sparkContext.broadcast(job_labels_list)
 
 
+# this will compare extracted job_titles from html <span> it will concatenate and match with list of job labels
+# e.g. HTML extracted span tag [Java] [Developer] -> Java_Developer == from list of job_tiles in normalized class
+# We can do more flexible and intelligent comparison, but doing stricter comparison.
 def validate_job_titles(job_titles):
     job_label_list = broadcasted_job_labels.value
     concatenated_title = '_'.join(job_titles).lower().replace(' ', '_')
     return concatenated_title in job_label_list
 
-
+# create a validation udf
 validate_job_titles_udf = udf(validate_job_titles, BooleanType())
 validation_df = resume_corpus_df.withColumn("validation_outcome", validate_job_titles_udf(col("job_titles")))
 validation_df = validation_df.withColumn("modified_at", current_timestamp())
