@@ -1,6 +1,7 @@
 import re
+
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import udf, input_file_name, regexp_extract, current_timestamp, explode, col, split
+from pyspark.sql.functions import udf, input_file_name, regexp_extract, current_timestamp, col, split
 from pyspark.sql.types import StringType, ArrayType, BooleanType
 
 # Initialize Spark session
@@ -30,6 +31,7 @@ normalized_class_df.toPandas().to_csv("normalized_class_df.csv", index=False)
 def extract_job_titles(html_content):
     job_titles = re.findall(r'<span class="hl">(.*?)</span>', html_content)
     return job_titles
+
 
 # create a title extraction udf, which extracts the job title array from the <span>
 # Register the function as a UDF
@@ -74,6 +76,7 @@ def validate_job_titles(job_titles):
     job_label_list = broadcasted_job_labels.value
     concatenated_title = '_'.join(job_titles).lower().replace(' ', '_')
     return concatenated_title in job_label_list
+
 
 # create a validation udf
 validate_job_titles_udf = udf(validate_job_titles, BooleanType())
